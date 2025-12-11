@@ -1,0 +1,5 @@
+mongodb-vault/data
+openbao/data
+openbao/logs
+secrets/openbao-keys.txt
+.env
