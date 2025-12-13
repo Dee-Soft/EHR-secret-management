@@ -9,22 +9,22 @@ NC='\033[0m' # No Color
 echo -e "${YELLOW}=== OpenBao Initialization ===${NC}"
 
 # Check if OpenBao is running
-if ! docker-compose -f docker-compose-secrets.yml exec openbao openbao status > /dev/null 2>&1; then
+if ! docker-compose -f docker-compose-simple.yml exec openbao openbao status > /dev/null 2>&1; then
     echo -e "${RED}Error: OpenBao is not running${NC}"
-    echo "Start OpenBao first: docker-compose -f docker-compose-secrets.yml up -d"
+    echo "Start OpenBao first: docker-compose -f docker-compose-simple.yml up -d"
     exit 1
 fi
 
 # Initialize OpenBao
 echo "Initializing OpenBao..."
-INIT_OUTPUT=$(docker-compose -f docker-compose-secrets.yml exec openbao openbao operator init \
+INIT_OUTPUT=$(docker-compose -f docker-compose-simple.yml exec openbao openbao operator init \
   -key-shares=5 \
   -key-threshold=3 \
   -format=json 2>/dev/null)
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}Failed to initialize OpenBao. It may already be initialized.${NC}"
-    echo "Check status: docker-compose -f docker-compose-secrets.yml exec openbao openbao status"
+    echo "Check status: docker-compose -f docker-compose-simple.yml exec openbao openbao status"
     exit 1
 fi
 
