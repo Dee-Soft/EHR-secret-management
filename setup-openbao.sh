@@ -1,69 +1,46 @@
 #!/bin/bash
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+echo "=== Setup OpenBao ==="
+# Create directories
+echo "Creating directories..."
+mkdir -p openbao/data mongodb-vault/{data,init}
+chmod 777 openbao/data mongodb-vault/data
 
-echo -e "${YELLOW}=== EHR Secret Management Setup ===${NC}"
+# Create MongoDB init script
+cat > mongodb-vault/init/init-mongo.js << 'MONGOEOF'
+db = db.getSiblingDB('openbao');
+db.createUser({
+  user: "openbao_user",
+  pwd: "SecurePassword123!",
+  roles: [
+    { role: "readWrite", db: "openbao" },
+    { role: "dbAdmin", db: "openbao" }
+  ]
+});
+print("MongoDB initialized");
+MONGOEOF
 
-# Check if Docker is running
-if ! docker info > /dev/null 2>&1; then
-    echo -e "${RED}Error: Docker is not running${NC}"
-    exit 1
-fi
-
-# Check if network exists, create if not
+# Create network if not exists
 if ! docker network inspect secrets_net > /dev/null 2>&1; then
     echo "Creating Docker network: secrets_net..."
     docker network create secrets_net
-    echo -e "${GREEN}✓ Network created${NC}"
-else
-    echo -e "${GREEN}✓ Network already exists${NC}"
 fi
-
-# Pull latest images
-echo "Pulling Docker images..."
-docker-compose -f docker-compose-secrets.yml pull
 
 # Start services
-echo "Starting OpenBao and MongoDB..."
+echo "Starting services..."
 docker-compose -f docker-compose-secrets.yml up -d
 
-# Wait for services to be ready
-echo "Waiting for services to start..."
+# Wait and check
 sleep 10
 
-# Check MongoDB health
-if docker-compose -f docker-compose-secrets.yml exec mongodb_vault echo "MongoDB ready" > /dev/null 2>&1; then
-    echo -e "${GREEN}✓ MongoDB is running${NC}"
-else
-    echo -e "${RED}✗ MongoDB failed to start${NC}"
-    exit 1
-fi
-
-# Wait for OpenBao to initialize
-echo "Waiting for OpenBao to initialize..."
-sleep 15
-
-# Check OpenBao status
-if docker-compose -f docker-compose-secrets.yml exec openbao openbao status > /dev/null 2>&1; then
-    echo -e "${GREEN}✓ OpenBao is running${NC}"
-else
-    echo -e "${RED}✗ OpenBao failed to start${NC}"
-    exit 1
-fi
-
 echo ""
-echo -e "${GREEN}=== Setup Complete ===${NC}"
+echo "=== Setup Complete ==="
+echo "OpenBao UI: http://localhost:8200"
+echo "Login token: $VAULT_TOKEN"
 echo ""
-echo "OpenBao Dashboard: http://localhost:8200"
+echo "MongoDB Port: 27018"
+echo "Test MongoDB: mongosh -u admin -p AdminSecurePassword123! --port 27018"
 echo ""
-echo "Next steps:"
-echo "1. Initialize OpenBao"
-echo "2. Unseal OpenBao"
-echo "3. Configure authentication"
-echo ""
-echo "To initialize OpenBao, run:"
-echo "  docker-compose -f docker-compose-secrets.yml exec openbao openbao operator init"
+echo "To test OpenBao:"
+echo "  openbao login $VAULT_TOKEN"
+echo "  openbao secrets list"

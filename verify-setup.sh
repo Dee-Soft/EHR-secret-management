@@ -1,82 +1,42 @@
 #!/bin/bash
+echo "=== Final OpenBao Verification ==="
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+# Load environment variables from .env file if it exists
+if [ -f .env ]; then
+    export $(cat .env | grep -v '^#' | xargs)
+fi
 
-echo -e "${YELLOW}=== Verifying Secret Management Setup ===${NC}"
+# Use the token from the environment variable, or prompt for it
+TOKEN="${VAULT_TOKEN}"
+if [ -z "$TOKEN" ]; then
+    echo "VAULT_TOKEN not found in .env file or environment variables."
+    read -sp "Please paste your root token: " TOKEN
+    echo
+fi
 
-# Check Docker network
-echo "1. Checking Docker network..."
-if docker network inspect secrets_net > /dev/null 2>&1; then
-    echo -e "   ${GREEN}✓ secrets_net network exists${NC}"
+echo "1. Testing token..."
+RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" --header "X-Vault-Token: $TOKEN" http://localhost:8200/v1/auth/token/lookup-self)
+if [ "$RESPONSE" = "200" ]; then
+    echo "   ✅ Token is valid."
 else
-    echo -e "   ${RED}✗ secrets_net network not found${NC}"
+    echo "   ❌ Token is invalid (HTTP Code: $RESPONSE). Please check the logs for the correct token."
     exit 1
 fi
 
-# Check MongoDB container
-echo "2. Checking MongoDB..."
-if docker ps --filter "name=mongodb_vault" --format "{{.Names}}" | grep -q "mongodb_vault"; then
-    echo -e "   ${GREEN}✓ MongoDB container is running${NC}"
-    
-    # Check MongoDB connectivity
-    if docker-compose -f docker-compose-secrets.yml exec mongodb_vault mongosh --quiet --eval "db.runCommand('ping').ok" 2>/dev/null | grep -q "1"; then
-        echo -e "   ${GREEN}✓ MongoDB is responding${NC}"
-    else
-        echo -e "   ${RED}✗ MongoDB not responding${NC}"
-    fi
-else
-    echo -e "   ${RED}✗ MongoDB container not found${NC}"
-fi
+echo "2. Enabling KV secrets engine at path 'ehr'..."
+curl -s --header "X-Vault-Token: $TOKEN" --request POST \
+  --data '{"type":"kv", "options": {"version": "2"}}' \
+  http://localhost:8200/v1/sys/mounts/ehr
 
-# Check OpenBao container
-echo "3. Checking OpenBao..."
-if docker ps --filter "name=openbao" --format "{{.Names}}" | grep -q "openbao"; then
-    echo -e "   ${GREEN}✓ OpenBao container is running${NC}"
-    
-    # Check OpenBao status
-    STATUS_OUTPUT=$(docker-compose -f docker-compose-secrets.yml exec openbao openbao status -format=json 2>/dev/null || true)
-    
-    if echo "$STATUS_OUTPUT" | grep -q '"initialized":true'; then
-        echo -e "   ${GREEN}✓ OpenBao is initialized${NC}"
-    else
-        echo -e "   ${YELLOW}⚠ OpenBao not initialized${NC}"
-    fi
-    
-    if echo "$STATUS_OUTPUT" | grep -q '"sealed":false'; then
-        echo -e "   ${GREEN}✓ OpenBao is unsealed${NC}"
-    else
-        echo -e "   ${YELLOW}⚠ OpenBao is sealed${NC}"
-    fi
-else
-    echo -e "   ${RED}✗ OpenBao container not found${NC}"
-fi
+echo "3. Writing a test secret..."
+curl -s --header "X-Vault-Token: $TOKEN" --header "Content-Type: application/json" --request POST \
+  --data '{"data": {"db_password": "super-secret-ehr-password"}}' \
+  http://localhost:8200/v1/ehr/data/mongodb
 
-# Check ports
-echo "4. Checking network ports..."
-if netstat -tuln 2>/dev/null | grep -q ":8200"; then
-    echo -e "   ${GREEN}✓ Port 8200 (OpenBao) is listening${NC}"
-else
-    echo -e "   ${YELLOW}⚠ Port 8200 not listening${NC}"
-fi
-
-if netstat -tuln 2>/dev/null | grep -q ":27017"; then
-    echo -e "   ${GREEN}✓ Port 27017 (MongoDB) is listening${NC}"
-else
-    echo -e "   ${YELLOW}⚠ Port 27017 not listening${NC}"
-fi
+echo "4. Reading the test secret..."
+curl -s --header "X-Vault-Token: $TOKEN" http://localhost:8200/v1/ehr/data/mongodb | python3 -m json.tool
 
 echo ""
-echo -e "${YELLOW}=== Summary ===${NC}"
-echo "OpenBao URL: http://localhost:8200"
-echo "MongoDB Port: 27017"
-echo "Docker Network: secrets_net"
-echo ""
-echo "To access OpenBao UI:"
-echo "  Open http://localhost:8200 in your browser"
-echo ""
-echo "To check OpenBao status:"
-echo "  docker-compose -f docker-compose-secrets.yml exec openbao openbao status"
+echo "=== Setup Successful! ==="
+echo "OpenBao is ready. You can now access the UI at http://localhost:8200"
+echo "Use this token to log in: $TOKEN"

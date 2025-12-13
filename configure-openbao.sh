@@ -4,12 +4,7 @@ echo "=== Configuring OpenBao for EHR System ==="
 
 # Set these variables
 VAULT_ADDR="http://localhost:8200"
-VAULT_TOKEN="s.ZlQFmE4R60IuiSWq0uC5xhiI"  # Replace with your actual token
-
-if [ "$VAULT_TOKEN" = "YOUR_ROOT_TOKEN_HERE" ]; then
-    echo "ERROR: Please edit this script and set VAULT_TOKEN to your actual root token"
-    exit 1
-fi
+VAULT_TOKEN="${VAULT_TOKEN}"
 
 echo "1. Enabling Transit Secrets Engine..."
 curl -s --header "X-Vault-Token: $VAULT_TOKEN" \
@@ -105,7 +100,7 @@ SECRET_ID=$(curl -s --header "X-Vault-Token: $VAULT_TOKEN" \
   python3 -c "import sys,json; print(json.load(sys.stdin)['data']['secret_id'])")
 
 echo "6. Storing EHR MongoDB credentials..."
-# Store your EHR database credentials (replace with your actual connection string)
+
 curl -s --header "X-Vault-Token: $VAULT_TOKEN" \
   --header "Content-Type: application/json" \
   --request POST \

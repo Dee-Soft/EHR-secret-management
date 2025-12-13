@@ -3,7 +3,7 @@
 echo "=== Testing EHR OpenBao Configuration ==="
 
 VAULT_ADDR="http://localhost:8200"
-VAULT_TOKEN="s.ZlQFmE4R60IuiSWq0uC5xhiI"  # Replace with your token
+VAULT_TOKEN="${VAULT_TOKEN}"
 
 echo "1. Testing Transit Engine..."
 echo "   Generating a test data key..."
